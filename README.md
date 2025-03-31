@@ -25,15 +25,11 @@ PostgresMigrations provides a database migration system using `PostgresClient` f
 Setup run
 ```sh
 docker compose up
-or 
-docker-compose up
 ```
 Tear down
 
 ```sh
 docker compose down
-or
-docker-compose down
 ```
 
 ## Documentation
