@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - '**.swift'
+    - '**.yml'
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-ci
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        image:
+          - 'swift:5.9'
+          - 'swift:5.10'
+          - 'swift:6.0'
+        postgres-image:
+          - 'postgres:17'
+          - 'postgres:16'
+          - 'postgres:14'
+        include:
+          - postgres-image: postgres:17
+            postgres-auth: scram-sha-256
+          - postgres-image: postgres:16
+            postgres-auth: scram-sha-256
+          - postgres-image: postgres:14
+            postgres-auth: md5
+    container:
+      image: ${{ matrix.image }}
+      volumes: [ 'pgrunshare:/var/run/postgresql' ]
+    env:
+      POSTGRES_DB: 'test_database'
+      POSTGRES_USER: 'test_user'
+      POSTGRES_PASSWORD: 'test_password'
+      POSTGRES_HOSTNAME: 'psql'
+      POSTGRES_SOCKET: '/var/run/postgresql/.s.PGSQL.5432'
+      POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
+    services:
+      psql:
+        image: ${{ matrix.postgres-image }}
+        volumes: [ 'pgrunshare:/var/run/postgresql' ]
+        env:
+          POSTGRES_DB: 'test_database'
+          POSTGRES_USER: 'test_user'
+          POSTGRES_PASSWORD: 'test_password'
+          POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
+          POSTGRES_INITDB_ARGS: --auth-host=${{ matrix.postgres-auth }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Test
+      run: |
+        swift test --enable-code-coverage
+    - name: Convert coverage files
+      run: |
+        llvm-cov export -format="lcov" \
+          .build/debug/postgres-migrationsPackageTests.xctest \
+          -ignore-filename-regex="\/Tests\/" \
+          -ignore-filename-regex="\/Benchmarks\/" \
+          -instr-profile .build/debug/codecov/default.profdata > info.lcov
+    - name: Upload to codecov.io
+      uses: codecov/codecov-action@v5
+      with:
+        files: info.lcov
+        token: ${{ secrets.CODECOV_TOKEN }}
