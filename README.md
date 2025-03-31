@@ -16,9 +16,9 @@
 </a>
 </p>
 
-# Hummingbird Postgres
+# PostgresMigrations
 
-Hummingbird postgres provides implementations of the job and persist frameworks from Hummingbird and a database migration system all using the `PostgresClient` from PostgresNIO.
+PostgresMigrations provides a database migration system using `PostgresClient` from PostgresNIO.
 
 ## Local Development setup
 
@@ -38,4 +38,4 @@ docker-compose down
 
 ## Documentation
 
-Reference documentation and guides for HummingbirdPostgres can be found [here](https://docs.hummingbird.codes/2.0/documentation/hummingbirdpostgres).
+Reference documentation and guides for PostgresMigrations can be found [here](https://docs.hummingbird.codes/2.0/documentation/postgresmigrations).
