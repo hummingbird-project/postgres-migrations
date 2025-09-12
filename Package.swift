@@ -17,14 +17,20 @@ let package = Package(
             name: "PostgresMigrations",
             dependencies: [
                 .product(name: "PostgresNIO", package: "postgres-nio")
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny")
             ]
         ),
         .testTarget(
             name: "PostgresMigrationsTests",
             dependencies: [
                 "PostgresMigrations"
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("ExistentialAny")
             ]
         ),
     ],
-    swiftLanguageVersions: [.v5, .version("6")]
+    swiftLanguageModes: [.v5, .v6]
 )
