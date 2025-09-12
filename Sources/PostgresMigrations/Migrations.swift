@@ -18,13 +18,13 @@ import PostgresNIO
 /// Database migration support
 public actor DatabaseMigrations {
     enum State {
-        case waiting([CheckedContinuation<Void, Error>])
+        case waiting([CheckedContinuation<Void, any Error>])
         case completed
-        case failed(Error)
+        case failed(any Error)
     }
 
-    var migrations: [DatabaseMigration]
-    var reverts: [String: DatabaseMigration]
+    var migrations: [any DatabaseMigration]
+    var reverts: [String: any DatabaseMigration]
     var state: State
 
     /// Initialize a DatabaseMigrations object
@@ -38,7 +38,7 @@ public actor DatabaseMigrations {
     /// - Parameters
     ///   - migration: DatabaseMigration to be applied
     ///   - skipDuplicates: Only add migration if it doesn't exist in the list
-    public func add(_ migration: DatabaseMigration, skipDuplicates: Bool = false) {
+    public func add(_ migration: any DatabaseMigration, skipDuplicates: Bool = false) {
         if skipDuplicates {
             let existingMigration = self.migrations.first {
                 type(of: $0) == type(of: migration)
@@ -52,7 +52,7 @@ public actor DatabaseMigrations {
     ///
     /// This is useful for migrations you might have to revert.
     /// - Parameter migration: DatabaseMigration to be registerd
-    public func register(_ migration: DatabaseMigration) {
+    public func register(_ migration: any DatabaseMigration) {
         self.reverts[migration.name] = migration
     }
 
@@ -96,7 +96,7 @@ public actor DatabaseMigrations {
                 groups.count == 0
                 ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
                 : groups
-            var migrationsToApply: [DatabaseMigration] = .init()
+            var migrationsToApply: [any DatabaseMigration] = .init()
             // for each group apply/revert migrations
             for group in groups {
                 let groupMigrations = migrations.filter { $0.group == group }
@@ -180,7 +180,7 @@ public actor DatabaseMigrations {
                 groups.count == 0
                 ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
                 : groups
-            var migrationsToRevert: [DatabaseMigration] = .init()
+            var migrationsToRevert: [any DatabaseMigration] = .init()
             // for each group revert migrations
             for group in groups {
                 let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
@@ -255,7 +255,7 @@ public actor DatabaseMigrations {
             // get migrations currently applied in the order they were applied
             let appliedMigrations = try await repository.getAll(client: client, logger: logger)
 
-            var migrationsToRevert: [DatabaseMigration] = .init()
+            var migrationsToRevert: [any DatabaseMigration] = .init()
             // if groups array passed in is empty then work out list of migration groups by combining
             // list of groups from migrations and applied migrations
             let groups =
@@ -338,7 +338,7 @@ public actor DatabaseMigrations {
         }
     }
 
-    func setFailed(_ error: Error) {
+    func setFailed(_ error: any Error) {
         switch self.state {
         case .waiting(let continuations):
             for cont in continuations {
@@ -437,14 +437,14 @@ struct PostgresMigrationRepository: Sendable {
         try await self.createMigrationsTable(client: client, logger: logger)
     }
 
-    func add(_ migration: DatabaseMigration, context: Context) async throws {
+    func add(_ migration: any DatabaseMigration, context: Context) async throws {
         try await context.connection.query(
             "INSERT INTO _hb_pg_migrations (\"name\", \"group\") VALUES (\(migration.name), \(migration.group.name))",
             logger: context.logger
         )
     }
 
-    func remove(_ migration: DatabaseMigration, context: Context) async throws {
+    func remove(_ migration: any DatabaseMigration, context: Context) async throws {
         try await context.connection.query(
             "DELETE FROM _hb_pg_migrations WHERE name = \(migration.name)",
             logger: context.logger
