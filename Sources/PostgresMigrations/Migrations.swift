@@ -34,6 +34,13 @@ public actor DatabaseMigrations {
         self.state = .waiting([])
     }
 
+    /// Initialize a DatabaseMigrations object
+    public init(migrations: [DatabaseMigration], reverts: [DatabaseMigration] = []) {
+        self.migrations = migrations
+        self.reverts = .init(reverts.map { ($0.name, $0) }) { first, _ in first }
+        self.state = .waiting([])
+    }
+
     /// Add migration to list of migrations to be be applied
     /// - Parameters
     ///   - migration: DatabaseMigration to be applied
