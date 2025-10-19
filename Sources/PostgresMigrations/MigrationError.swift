@@ -34,7 +34,7 @@ public struct DatabaseMigrationError: Error, Equatable {
     /// Applied migrations are inconsistent with expected list
     public static var appliedMigrationsInconsistent: Self { .init(.appliedMigrationsInconsistent) }
     /// Cannot revert a migration as we do not have its details. Add it to the revert list using
-    /// PostgresMigrations.add(revert:)
+    /// PostgresMigrations.register()
     public static var cannotRevertMigration: Self { .init(.cannotRevertMigration) }
 }
 
@@ -45,7 +45,7 @@ extension DatabaseMigrationError: CustomStringConvertible {
         case .requiresChanges: "Database requires changes. Run `migrate` with `dryRun` set to false."
         case .appliedMigrationsInconsistent: "Applied migrations are inconsistent with expected list."
         case .cannotRevertMigration:
-            "Cannot revert migration because we don't have its details. Use `PostgresMigrations.register` to register the DatabaseMigration."
+            "Cannot revert migration because we don't have its details. Use `PostgresMigrations.register` to register the DatabaseMigration or remove its database entry using option `.removeUnknownMigrations`."
         }
     }
 }
