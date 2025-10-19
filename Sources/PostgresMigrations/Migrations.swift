@@ -231,14 +231,22 @@ public actor DatabaseMigrations {
     /// - Parameters:
     ///   - client: Postgres client
     ///   - groups: Migration groups to revert, an empty array means all groups
+    ///   - removeUnregistered: Remove migrations that haven't been registered with migrations system
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
     public func revertInconsistent(
         client: PostgresClient,
         groups: [DatabaseMigrationGroup] = [],
+        removeUnregistered: Bool = false,
         logger: Logger,
         dryRun: Bool
     ) async throws {
+        struct EmptyMigration: DatabaseMigration {
+            func apply(connection: PostgresNIO.PostgresConnection, logger: Logging.Logger) async throws {}
+            func revert(connection: PostgresNIO.PostgresConnection, logger: Logging.Logger) async throws {}
+            let name: String
+            let group: DatabaseMigrationGroup
+        }
         let repository = PostgresMigrationRepository(client: client)
         do {
             let migrations = self.migrations
@@ -281,8 +289,14 @@ public actor DatabaseMigrations {
                     // look for migration to revert in registered migration list and revert dictionary.
                     guard let migration = registeredMigrations[migrationName]
                     else {
-                        logger.error("Failed to find migration \(migrationName)")
-                        throw DatabaseMigrationError.cannotRevertMigration
+                        if removeUnregistered {
+                            migrationsToRevert.append(EmptyMigration(name: migrationName, group: group))
+                            logger.info("Removing \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
+                            continue
+                        } else {
+                            logger.error("Failed to find migration \(migrationName)")
+                            throw DatabaseMigrationError.cannotRevertMigration
+                        }
                     }
                     migrationsToRevert.append(migration)
                     logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
