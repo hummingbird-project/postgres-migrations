@@ -340,6 +340,21 @@ final class MigrationTests: XCTestCase {
                 XCTFail()
             } catch let error as DatabaseMigrationError where error == .cannotRevertMigration {
             }
+            // Run revert ignoring unknown migrations
+            try await migrations.revertInconsistent(
+                client: client,
+                groups: [.default],
+                options: .ignoreUnknownMigrations,
+                logger: Self.logger,
+                dryRun: false
+            )
+            var appliedMigrations = try await getAll(client: client)
+            XCTAssertEqual(appliedMigrations.count, 3)
+            XCTAssertEqual(appliedMigrations[0], "test1")
+            XCTAssertEqual(appliedMigrations[1], "test2")
+            XCTAssertEqual(appliedMigrations[2], "test3")
+
+            // Run revert removing unknown migrations
             try await migrations.revertInconsistent(
                 client: client,
                 groups: [.default],
@@ -347,9 +362,9 @@ final class MigrationTests: XCTestCase {
                 logger: Self.logger,
                 dryRun: false
             )
-            let migrations = try await getAll(client: client)
-            XCTAssertEqual(migrations.count, 1)
-            XCTAssertEqual(migrations[0], "test1")
+            appliedMigrations = try await getAll(client: client)
+            XCTAssertEqual(appliedMigrations.count, 1)
+            XCTAssertEqual(appliedMigrations[0], "test1")
         }
     }
 

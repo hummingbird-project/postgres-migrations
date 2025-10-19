@@ -269,8 +269,10 @@ public actor DatabaseMigrations {
 
         public init(rawValue: Int) { self.rawValue = rawValue }
 
+        // Ignore migrations we don't know about
+        static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
         // Remove database entry for migrations we don't know about
-        static var removeUnknownMigrations: Self { .init(rawValue: 1 << 0) }
+        static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
     }
 
     /// Revert database migrations that are inconsistent with the migration list
@@ -319,7 +321,10 @@ public actor DatabaseMigrations {
             // for each group revert migrations
             for group in groups {
                 let groupMigrations = migrations.filter { $0.group == group }
-                let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                var appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                if options.contains(.ignoreUnknownMigrations) {
+                    appliedGroupMigrations = appliedGroupMigrations.filter { registeredMigrations[$0.name] != nil }
+                }
 
                 let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
                 var i = 0
