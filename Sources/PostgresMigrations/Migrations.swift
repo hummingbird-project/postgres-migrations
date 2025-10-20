@@ -52,7 +52,7 @@ public actor DatabaseMigrations {
     /// - Parameters
     ///   - migrations: Collection of DatabaseMigrations to be applied
     ///   - skipDuplicates: Only add migration if it doesn't exist in the list
-    public func add(_ migrations: some Collection<DatabaseMigration>, skipDuplicates: Bool = false) {
+    public func add(_ migrations: some Collection<any DatabaseMigration>, skipDuplicates: Bool = false) {
         for migration in migrations {
             self.add(migration, skipDuplicates: skipDuplicates)
         }
