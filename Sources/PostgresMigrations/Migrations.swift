@@ -73,7 +73,7 @@ public actor DatabaseMigrations {
         public init(rawValue: Int) { self.rawValue = rawValue }
 
         /// If database has a migration applied we don't know about, ignore it
-        static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
+        public static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
     }
 
     /// Apply database migrations
@@ -177,9 +177,9 @@ public actor DatabaseMigrations {
         public init(rawValue: Int) { self.rawValue = rawValue }
 
         /// Ignore migrations we don't know about
-        static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
+        public static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
         /// Remove database entry for migrations we don't know about
-        static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
+        public static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
     }
 
     /// Revert database migrations
@@ -276,9 +276,9 @@ public actor DatabaseMigrations {
         public init(rawValue: Int) { self.rawValue = rawValue }
 
         /// Ignore migrations we don't know about
-        static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
+        public static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
         /// Remove database entry for migrations we don't know about
-        static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
+        public static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
         /// Disable the reverting of migrations that follow an applied migration that is inconsistent
         ///
         /// The default for revertInconsistent is to revert all migrations after finding one that is inconsistent.
@@ -288,7 +288,7 @@ public actor DatabaseMigrations {
         ///
         /// Using this option means `revertInconsistent` cannot fix the migration list if the order of
         /// migrations has changed.
-        static var disableRevertsFollowingRevert: Self { .init(rawValue: 1 << 2) }
+        public static var disableRevertsFollowingRevert: Self { .init(rawValue: 1 << 2) }
     }
 
     /// Revert database migrations that are inconsistent with the migration list
