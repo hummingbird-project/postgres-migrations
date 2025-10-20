@@ -279,10 +279,15 @@ public actor DatabaseMigrations {
         static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
         /// Remove database entry for migrations we don't know about
         static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
-        /// Disable the reverting of migrations that follow the revert of an applied migration that is
-        /// not in the migration list
+        /// Disable the reverting of migrations that follow an applied migration that is inconsistent
         ///
+        /// The default for revertInconsistent is to revert all migrations after finding one that is inconsistent.
+        /// The logic behind this is that removing that migration but not the following migrations will
+        /// leave the database structure in indeterminate state. But this is a destructive action and
+        /// you can disable this with this option.
         ///
+        /// Using this option means `revertInconsistent` cannot fix the migration list if the order of
+        /// migrations has changed.
         static var disableRevertsFollowingRevert: Self { .init(rawValue: 1 << 2) }
     }
 
@@ -291,7 +296,7 @@ public actor DatabaseMigrations {
     /// This will revert any migrations in the applied migration list after an inconsistency has been found in
     /// list eg a migration is missing or the order of migrations has changed. This is a destructive action
     /// so it is best to run this with dryRun set to true before running it without so you know what migrations
-    /// it will revert.
+    /// it will revert. You can control this using the options parameter.
     ///
     /// For a migration to be removed it has to have been registered either using
     /// ``DatabaseMigrations/add(_:skipDuplicates:)`` or ``DatabaseMigrations/register(_:)``. If a migration name
