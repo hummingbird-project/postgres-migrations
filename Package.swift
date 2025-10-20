@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "postgres-migrations",
-    platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17)],
+    platforms: [.macOS(.v14), .iOS(.v17), .macCatalyst(.v17), .tvOS(.v17), .visionOS(.v1)],
     products: [
         .library(name: "PostgresMigrations", targets: ["PostgresMigrations"])
     ],
