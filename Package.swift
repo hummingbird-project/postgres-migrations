@@ -36,9 +36,7 @@ let package = Package(
             dependencies: [
                 "PostgresMigrations"
             ],
-            swiftSettings: [
-                .enableUpcomingFeature("ExistentialAny")
-            ]
+            swiftSettings: swiftSettings
         ),
     ],
 )
