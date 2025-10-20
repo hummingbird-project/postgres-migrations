@@ -50,11 +50,11 @@ public actor DatabaseMigrations {
 
     /// Add migrations to list of migrations to be be applied
     /// - Parameters
-    ///   - migration: DatabaseMigration to be applied
+    ///   - migrations: Collection of DatabaseMigrations to be applied
     ///   - skipDuplicates: Only add migration if it doesn't exist in the list
     public func add(_ migrations: some Collection<DatabaseMigration>, skipDuplicates: Bool = false) {
         for migration in migrations {
-            self.add(migration)
+            self.add(migration, skipDuplicates: skipDuplicates)
         }
     }
 
@@ -66,7 +66,7 @@ public actor DatabaseMigrations {
         self.reverts[migration.name] = migration
     }
 
-    /// Options in ``DatabaseMigrations/revertInconsistent(client:group:options:logger:dryRun:)``.
+    /// Options used in ``DatabaseMigrations/apply(client:group:options:logger:dryRun:)``.
     public struct ApplyOptions: OptionSet, Sendable {
         public let rawValue: Int
 
@@ -170,7 +170,7 @@ public actor DatabaseMigrations {
         self.setCompleted()
     }
 
-    /// Options in ``DatabaseMigrations/revertInconsistent(client:group:options:logger:dryRun:)``.
+    /// Options used in ``DatabaseMigrations/revert(client:group:options:logger:dryRun:)``.
     public struct RevertOptions: OptionSet, Sendable {
         public let rawValue: Int
 
@@ -268,7 +268,7 @@ public actor DatabaseMigrations {
         }
     }
 
-    /// Options in ``DatabaseMigrations/revertInconsistent(client:group:options:logger:dryRun:)``.
+    /// Options used in ``DatabaseMigrations/revertInconsistent(client:group:options:logger:dryRun:)``.
     public struct RevertInconsistentOptions: OptionSet, Sendable {
         public let rawValue: Int
 
