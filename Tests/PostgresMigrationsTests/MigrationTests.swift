@@ -3,6 +3,7 @@ import Foundation
 import Logging
 import PostgresNIO
 import ServiceLifecycle
+import UnixSignals
 import XCTest
 
 @testable import PostgresMigrations

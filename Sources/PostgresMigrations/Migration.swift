@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-import PostgresNIO
+public import PostgresNIO
 
 /// Protocol for a database migration
 ///
