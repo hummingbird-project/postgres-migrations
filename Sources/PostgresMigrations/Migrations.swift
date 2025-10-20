@@ -72,7 +72,7 @@ public actor DatabaseMigrations {
 
         public init(rawValue: Int) { self.rawValue = rawValue }
 
-        // If database has a migration applied we don't know about, ignore it
+        /// If database has a migration applied we don't know about, ignore it
         static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
     }
 
@@ -176,9 +176,9 @@ public actor DatabaseMigrations {
 
         public init(rawValue: Int) { self.rawValue = rawValue }
 
-        // Ignore migrations we don't know about
+        /// Ignore migrations we don't know about
         static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
-        // Remove database entry for migrations we don't know about
+        /// Remove database entry for migrations we don't know about
         static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
     }
 
@@ -229,7 +229,7 @@ public actor DatabaseMigrations {
                     appliedGroupMigrations = appliedGroupMigrations.filter { registeredMigrations[$0.name] != nil }
                 }
                 // Revert migrations in reverse
-                for j in (0..<appliedGroupMigrations.count).reversed() {
+                for j in (0..<appliedGroupMigrations.count) {
                     let migrationName = appliedGroupMigrations[j].name
                     // look for migration to revert in registered migration list and revert dictionary.
                     guard let migration = registeredMigrations[migrationName]
@@ -253,7 +253,8 @@ public actor DatabaseMigrations {
                 }
             } else if migrationsToRevert.count > 0 {
                 _ = try await repository.withTransaction(logger: logger) { context in
-                    for migration in migrationsToRevert {
+                    // run migration reverts in reverse order
+                    for migration in migrationsToRevert.reversed() {
                         try await migration.revert(
                             connection: context.connection,
                             logger: context.logger
@@ -274,10 +275,15 @@ public actor DatabaseMigrations {
 
         public init(rawValue: Int) { self.rawValue = rawValue }
 
-        // Ignore migrations we don't know about
+        /// Ignore migrations we don't know about
         static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
-        // Remove database entry for migrations we don't know about
+        /// Remove database entry for migrations we don't know about
         static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
+        /// Disable the reverting of migrations that follow the revert of an applied migration that is
+        /// not in the migration list
+        ///
+        ///
+        static var disableRevertsFollowingRevert: Self { .init(rawValue: 1 << 2) }
     }
 
     /// Revert database migrations that are inconsistent with the migration list
@@ -339,12 +345,29 @@ public actor DatabaseMigrations {
                 {
                     i += 1
                 }
-                // Revert migrations in reverse
-                for j in (i..<appliedGroupMigrations.count).reversed() {
-                    let migrationName = appliedGroupMigrations[j].name
+                // Revert migrations
+                var j = i
+                while i < appliedGroupMigrations.count {
+                    let migrationName = appliedGroupMigrations[i].name
+                    if options.contains(.disableRevertsFollowingRevert) {
+                        if j < groupMigrations.count {
+                            // if migration name is same skip revert
+                            if migrationName == groupMigrations[j].name {
+                                j += 1
+                                i += 1
+                                continue
+                            } else {
+                                // verify migration is in applied migrations, otherwise skip unapplied migration
+                                guard appliedGroupMigrations[i...].first(where: { $0.name == groupMigrations[j].name }) != nil else {
+                                    j += 1
+                                    continue
+                                }
+                            }
+                        }
+                    }
+                    i += 1
                     // look for migration to revert in registered migration list and revert dictionary.
-                    guard let migration = registeredMigrations[migrationName]
-                    else {
+                    guard let migration = registeredMigrations[migrationName] else {
                         if options.contains(.removeUnknownMigrations) {
                             migrationsToRevert.append(EmptyMigration(name: migrationName, group: group))
                             logger.info("Removing \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
@@ -364,7 +387,8 @@ public actor DatabaseMigrations {
                 }
             } else if migrationsToRevert.count > 0 {
                 _ = try await repository.withTransaction(logger: logger) { context in
-                    for migration in migrationsToRevert {
+                    // run migration reverts in reverse order
+                    for migration in migrationsToRevert.reversed() {
                         try await migration.revert(
                             connection: context.connection,
                             logger: context.logger

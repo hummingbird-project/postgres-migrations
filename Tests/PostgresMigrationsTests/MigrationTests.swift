@@ -327,6 +327,66 @@ final class MigrationTests: XCTestCase {
 
     }
 
+    func testRevertInconsistentDisableFollowing() async throws {
+        let order = TestOrderMigration.Order()
+        try await self.testMigrations(revert: false) { migrations in
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test3", order: order, applyOrder: 3))
+            await migrations.add(TestOrderMigration(name: "test4", order: order, applyOrder: 4))
+            await migrations.add(TestOrderMigration(name: "test5", order: order, applyOrder: 5))
+        } verify: { migrations, client in
+            try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
+        }
+
+        try await self.testMigrations { migrations in
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test5", order: order, applyOrder: 3))
+        } verify: { migrations, client in
+            try await migrations.revertInconsistent(
+                client: client,
+                groups: [.default],
+                options: [.disableRevertsFollowingRevert, .removeUnknownMigrations],
+                logger: Self.logger,
+                dryRun: false
+            )
+            let migrations = try await getAll(client: client)
+            XCTAssertEqual(migrations.count, 3)
+            XCTAssertEqual(migrations[0], "test1")
+            XCTAssertEqual(migrations[1], "test2")
+            XCTAssertEqual(migrations[2], "test5")
+        }
+    }
+
+    func testRevertInconsistentDisableFollowingMissingMigration() async throws {
+        let order = TestOrderMigration.Order()
+        try await self.testMigrations(revert: false) { migrations in
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test3", order: order, applyOrder: 2))
+        } verify: { migrations, client in
+            try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
+        }
+
+        try await self.testMigrations { migrations in
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test3", order: order, applyOrder: 3))
+        } verify: { migrations, client in
+            try await migrations.revertInconsistent(
+                client: client,
+                groups: [.default],
+                options: [.disableRevertsFollowingRevert, .removeUnknownMigrations],
+                logger: Self.logger,
+                dryRun: false
+            )
+            let migrations = try await getAll(client: client)
+            XCTAssertEqual(migrations.count, 2)
+            XCTAssertEqual(migrations[0], "test1")
+            XCTAssertEqual(migrations[1], "test3")
+        }
+    }
+
     func testRevertInconsistentRemovingUnknown() async throws {
         let order = TestOrderMigration.Order()
         try await self.testMigrations(revert: false) { migrations in
