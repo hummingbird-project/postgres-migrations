@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-import PostgresNIO
-import ServiceLifecycle
+public import PostgresNIO
+public import ServiceLifecycle
 
 /// Service that runs a database migration
 public struct DatabaseMigrationService: Service {

@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-import PostgresNIO
+public import PostgresNIO
 
 /// Database migration support
 public actor DatabaseMigrations {
