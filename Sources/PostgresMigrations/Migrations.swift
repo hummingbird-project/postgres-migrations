@@ -52,7 +52,7 @@ public actor DatabaseMigrations {
     /// - Parameters
     ///   - migrations: Collection of DatabaseMigrations to be applied
     ///   - skipDuplicates: Only add migration if it doesn't exist in the list
-    public func add(_ migrations: some Collection<any DatabaseMigration>, skipDuplicates: Bool = false) {
+    public func add(contentsOf migrations: some Collection<any DatabaseMigration>, skipDuplicates: Bool = false) {
         for migration in migrations {
             self.add(migration, skipDuplicates: skipDuplicates)
         }
@@ -66,7 +66,7 @@ public actor DatabaseMigrations {
         self.reverts[migration.name] = migration
     }
 
-    /// Options used in ``DatabaseMigrations/apply(client:group:options:logger:dryRun:)``.
+    /// Options used in ``DatabaseMigrations/apply(client:groups:options:logger:dryRun:)``.
     public struct ApplyOptions: OptionSet, Sendable {
         public let rawValue: Int
 
@@ -170,7 +170,7 @@ public actor DatabaseMigrations {
         self.setCompleted()
     }
 
-    /// Options used in ``DatabaseMigrations/revert(client:group:options:logger:dryRun:)``.
+    /// Options used in ``DatabaseMigrations/revert(client:groups:options:logger:dryRun:)``.
     public struct RevertOptions: OptionSet, Sendable {
         public let rawValue: Int
 
@@ -269,7 +269,7 @@ public actor DatabaseMigrations {
         }
     }
 
-    /// Options used in ``DatabaseMigrations/revertInconsistent(client:group:options:logger:dryRun:)``.
+    /// Options used in ``DatabaseMigrations/revertInconsistent(client:groups:options:logger:dryRun:)``.
     public struct RevertInconsistentOptions: OptionSet, Sendable {
         public let rawValue: Int
 
@@ -300,8 +300,8 @@ public actor DatabaseMigrations {
     ///
     /// For a migration to be removed it has to have been registered either using
     /// ``DatabaseMigrations/add(_:skipDuplicates:)`` or ``DatabaseMigrations/register(_:)``. If a migration name
-    /// is found that has no associated migration then a ``DatabaseMigrationError.cannotRevertMigration`` error is
-    /// thrown. You can avoid this error by including the option ``RevertInconsistentOptions.removeUnknownMigrations``
+    /// is found that has no associated migration then a ``DatabaseMigrationError/cannotRevertMigration`` error is
+    /// thrown. You can avoid this error by including the option ``RevertInconsistentOptions/removeUnknownMigrations``
     /// which will remove database entries for migrations that haven't been registered.
     ///
     /// - Parameters:
