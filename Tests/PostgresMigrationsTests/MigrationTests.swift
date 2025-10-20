@@ -183,7 +183,7 @@ final class MigrationTests: XCTestCase {
         }
     }
 
-    func testRevertWithRemoveUnknown() async throws {
+    func testRevertRemovingUnknown() async throws {
         let order = TestOrderMigration.Order()
         try await self.testMigrations(revert: false) { migrations in
             await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
@@ -197,10 +197,16 @@ final class MigrationTests: XCTestCase {
         try await self.testMigrations { migrations in
             await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, revertOrder: 4))
         } verify: { migrations, client in
-            try await migrations.revert(client: client, groups: [.default], options: .removeUnknownMigrations, logger: Self.logger, dryRun: false)
+            try await migrations.revert(client: client, groups: [.default], options: .ignoreUnknownMigrations, logger: Self.logger, dryRun: false)
             order.expect(5)
-            let migrations = try await getAll(client: client)
-            XCTAssertEqual(migrations.count, 0)
+            var appliedMigrations = try await getAll(client: client)
+            XCTAssertEqual(appliedMigrations.count, 1)
+            XCTAssertEqual(appliedMigrations[0], "test2")
+
+            try await migrations.revert(client: client, groups: [.default], options: .removeUnknownMigrations, logger: Self.logger, dryRun: false)
+            order.expect(6)
+            appliedMigrations = try await getAll(client: client)
+            XCTAssertEqual(appliedMigrations.count, 0)
         }
     }
 
