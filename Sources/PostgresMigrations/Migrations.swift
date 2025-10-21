@@ -48,12 +48,32 @@ public actor DatabaseMigrations {
         self.migrations.append(migration)
     }
 
+    /// Add migrations to list of migrations to be be applied
+    /// - Parameters
+    ///   - migrations: Collection of DatabaseMigrations to be applied
+    ///   - skipDuplicates: Only add migration if it doesn't exist in the list
+    public func add(contentsOf migrations: some Collection<any DatabaseMigration>, skipDuplicates: Bool = false) {
+        for migration in migrations {
+            self.add(migration, skipDuplicates: skipDuplicates)
+        }
+    }
+
     /// Register migration without it being applied
     ///
     /// This is useful for migrations you might have to revert.
     /// - Parameter migration: DatabaseMigration to be registerd
     public func register(_ migration: any DatabaseMigration) {
         self.reverts[migration.name] = migration
+    }
+
+    /// Options used in ``DatabaseMigrations/apply(client:groups:options:logger:dryRun:)``.
+    public struct ApplyOptions: OptionSet, Sendable {
+        public let rawValue: Int
+
+        public init(rawValue: Int) { self.rawValue = rawValue }
+
+        /// If database has a migration applied we don't know about, ignore it
+        public static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
     }
 
     /// Apply database migrations
@@ -65,11 +85,13 @@ public actor DatabaseMigrations {
     /// - Parameters:
     ///   - client: Postgres client
     ///   - groups: Migration groups to apply, an empty array means all groups
+    ///   - options: Options when applying migrations
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
     public func apply(
         client: PostgresClient,
         groups: [DatabaseMigrationGroup] = [],
+        options: ApplyOptions = [],
         logger: Logger,
         dryRun: Bool
     ) async throws {
@@ -90,6 +112,9 @@ public actor DatabaseMigrations {
             // get migrations currently applied in the order they were applied
             let appliedMigrations = try await repository.getAll(client: client, logger: logger)
 
+            // build map of registered migrations
+            let registeredMigrations = self.registeredMigrations
+
             // if groups array passed in is empty then work out list of migration groups by combining
             // list of groups from migrations and applied migrations
             let groups =
@@ -100,8 +125,10 @@ public actor DatabaseMigrations {
             // for each group apply/revert migrations
             for group in groups {
                 let groupMigrations = migrations.filter { $0.group == group }
-                let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
-
+                var appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                if options.contains(.ignoreUnknownMigrations) {
+                    appliedGroupMigrations = appliedGroupMigrations.filter { registeredMigrations[$0.name] != nil }
+                }
                 let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
                 var i = 0
                 // while migrations and applied migrations are the same
@@ -143,17 +170,31 @@ public actor DatabaseMigrations {
         self.setCompleted()
     }
 
+    /// Options used in ``DatabaseMigrations/revert(client:groups:options:logger:dryRun:)``.
+    public struct RevertOptions: OptionSet, Sendable {
+        public let rawValue: Int
+
+        public init(rawValue: Int) { self.rawValue = rawValue }
+
+        /// Ignore migrations we don't know about
+        public static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
+        /// Remove database entry for migrations we don't know about
+        public static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
+    }
+
     /// Revert database migrations
     ///
     /// This will revert all the migrations in the applied migration list
     /// - Parameters:
     ///   - client: Postgres client
     ///   - groups: Migration groups to revert, an empty array means all groups
+    ///   - options: Options when reverting migrations
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
     public func revert(
         client: PostgresClient,
         groups: [DatabaseMigrationGroup] = [],
+        options: RevertOptions = [],
         logger: Logger,
         dryRun: Bool
     ) async throws {
@@ -183,15 +224,24 @@ public actor DatabaseMigrations {
             var migrationsToRevert: [any DatabaseMigration] = .init()
             // for each group revert migrations
             for group in groups {
-                let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                var appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                if options.contains(.ignoreUnknownMigrations) {
+                    appliedGroupMigrations = appliedGroupMigrations.filter { registeredMigrations[$0.name] != nil }
+                }
                 // Revert migrations in reverse
-                for j in (0..<appliedGroupMigrations.count).reversed() {
+                for j in (0..<appliedGroupMigrations.count) {
                     let migrationName = appliedGroupMigrations[j].name
                     // look for migration to revert in registered migration list and revert dictionary.
                     guard let migration = registeredMigrations[migrationName]
                     else {
-                        logger.error("Failed to find migration \(migrationName)")
-                        throw DatabaseMigrationError.cannotRevertMigration
+                        if options.contains(.removeUnknownMigrations) {
+                            migrationsToRevert.append(EmptyMigration(name: migrationName, group: group))
+                            logger.info("Removing \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
+                            continue
+                        } else {
+                            logger.error("Failed to find migration \(migrationName)")
+                            throw DatabaseMigrationError.cannotRevertMigration
+                        }
                     }
                     migrationsToRevert.append(migration)
                     logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
@@ -203,7 +253,8 @@ public actor DatabaseMigrations {
                 }
             } else if migrationsToRevert.count > 0 {
                 _ = try await repository.withTransaction(logger: logger) { context in
-                    for migration in migrationsToRevert {
+                    // run migration reverts in reverse order
+                    for migration in migrationsToRevert.reversed() {
                         try await migration.revert(
                             connection: context.connection,
                             logger: context.logger
@@ -218,24 +269,51 @@ public actor DatabaseMigrations {
         }
     }
 
+    /// Options used in ``DatabaseMigrations/revertInconsistent(client:groups:options:logger:dryRun:)``.
+    public struct RevertInconsistentOptions: OptionSet, Sendable {
+        public let rawValue: Int
+
+        public init(rawValue: Int) { self.rawValue = rawValue }
+
+        /// Ignore migrations we don't know about
+        public static var ignoreUnknownMigrations: Self { .init(rawValue: 1 << 0) }
+        /// Remove database entry for migrations we don't know about
+        public static var removeUnknownMigrations: Self { .init(rawValue: 1 << 1) }
+        /// Disable the reverting of migrations that follow an applied migration that is inconsistent
+        ///
+        /// The default for revertInconsistent is to revert all migrations after finding one that is inconsistent.
+        /// The logic behind this is that removing that migration but not the following migrations will
+        /// leave the database structure in indeterminate state. But this is a destructive action and
+        /// you can disable this with this option.
+        ///
+        /// Using this option means `revertInconsistent` cannot fix the migration list if the order of
+        /// migrations has changed.
+        public static var disableRevertsFollowingRevert: Self { .init(rawValue: 1 << 2) }
+    }
+
     /// Revert database migrations that are inconsistent with the migration list
     ///
     /// This will revert any migrations in the applied migration list after an inconsistency has been found in
     /// list eg a migration is missing or the order of migrations has changed. This is a destructive action
     /// so it is best to run this with dryRun set to true before running it without so you know what migrations
-    /// it will revert.
+    /// it will revert. You can control this using the options parameter.
     ///
     /// For a migration to be removed it has to have been registered either using
-    /// ``DatabaseMigrations/add(_:skipDuplicates:)`` or ``DatabaseMigrations/register(_:)``.
+    /// ``DatabaseMigrations/add(_:skipDuplicates:)`` or ``DatabaseMigrations/register(_:)``. If a migration name
+    /// is found that has no associated migration then a ``DatabaseMigrationError/cannotRevertMigration`` error is
+    /// thrown. You can avoid this error by including the option ``RevertInconsistentOptions/removeUnknownMigrations``
+    /// which will remove database entries for migrations that haven't been registered.
     ///
     /// - Parameters:
     ///   - client: Postgres client
     ///   - groups: Migration groups to revert, an empty array means all groups
+    ///   - options: Options when reverting migrations
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
     public func revertInconsistent(
         client: PostgresClient,
         groups: [DatabaseMigrationGroup] = [],
+        options: RevertInconsistentOptions = [],
         logger: Logger,
         dryRun: Bool
     ) async throws {
@@ -243,13 +321,7 @@ public actor DatabaseMigrations {
         do {
             let migrations = self.migrations
             // build map of registered migrations
-            let registeredMigrations = {
-                var registeredMigrations = self.reverts
-                for migration in migrations {
-                    registeredMigrations[migration.name] = migration
-                }
-                return registeredMigrations
-            }()
+            let registeredMigrations = self.registeredMigrations
             // setup migration repository (create table)
             _ = try await repository.setup(client: client, logger: logger)
             // get migrations currently applied in the order they were applied
@@ -265,7 +337,10 @@ public actor DatabaseMigrations {
             // for each group revert migrations
             for group in groups {
                 let groupMigrations = migrations.filter { $0.group == group }
-                let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                var appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                if options.contains(.ignoreUnknownMigrations) {
+                    appliedGroupMigrations = appliedGroupMigrations.filter { registeredMigrations[$0.name] != nil }
+                }
 
                 let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
                 var i = 0
@@ -275,14 +350,37 @@ public actor DatabaseMigrations {
                 {
                     i += 1
                 }
-                // Revert migrations in reverse
-                for j in (i..<appliedGroupMigrations.count).reversed() {
-                    let migrationName = appliedGroupMigrations[j].name
+                // Revert migrations
+                var j = i
+                while i < appliedGroupMigrations.count {
+                    let migrationName = appliedGroupMigrations[i].name
+                    if options.contains(.disableRevertsFollowingRevert) {
+                        if j < groupMigrations.count {
+                            // if migration name is same skip revert
+                            if migrationName == groupMigrations[j].name {
+                                j += 1
+                                i += 1
+                                continue
+                            } else {
+                                // verify migration is in applied migrations, otherwise skip unapplied migration
+                                guard appliedGroupMigrations[i...].first(where: { $0.name == groupMigrations[j].name }) != nil else {
+                                    j += 1
+                                    continue
+                                }
+                            }
+                        }
+                    }
+                    i += 1
                     // look for migration to revert in registered migration list and revert dictionary.
-                    guard let migration = registeredMigrations[migrationName]
-                    else {
-                        logger.error("Failed to find migration \(migrationName)")
-                        throw DatabaseMigrationError.cannotRevertMigration
+                    guard let migration = registeredMigrations[migrationName] else {
+                        if options.contains(.removeUnknownMigrations) {
+                            migrationsToRevert.append(EmptyMigration(name: migrationName, group: group))
+                            logger.info("Removing \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
+                            continue
+                        } else {
+                            logger.error("Failed to find migration \(migrationName)")
+                            throw DatabaseMigrationError.cannotRevertMigration
+                        }
                     }
                     migrationsToRevert.append(migration)
                     logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
@@ -294,7 +392,8 @@ public actor DatabaseMigrations {
                 }
             } else if migrationsToRevert.count > 0 {
                 _ = try await repository.withTransaction(logger: logger) { context in
-                    for migration in migrationsToRevert {
+                    // run migration reverts in reverse order
+                    for migration in migrationsToRevert.reversed() {
                         try await migration.revert(
                             connection: context.connection,
                             logger: context.logger
@@ -402,6 +501,15 @@ public actor DatabaseMigrations {
             appliedIndex += 1
         }
     }
+
+    /// Map of both migrations added and migrations registered for removal
+    fileprivate var registeredMigrations: [String: any DatabaseMigration] {
+        var registeredMigrations = self.reverts
+        for migration in migrations {
+            registeredMigrations[migration.name] = migration
+        }
+        return registeredMigrations
+    }
 }
 
 /// Create, remove and list migrations
@@ -489,4 +597,11 @@ extension Array where Element: Equatable {
             return result
         }
     }
+}
+
+private struct EmptyMigration: DatabaseMigration {
+    func apply(connection: PostgresNIO.PostgresConnection, logger: Logging.Logger) async throws {}
+    func revert(connection: PostgresNIO.PostgresConnection, logger: Logging.Logger) async throws {}
+    let name: String
+    let group: DatabaseMigrationGroup
 }
