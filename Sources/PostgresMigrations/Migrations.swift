@@ -474,7 +474,8 @@ public actor DatabaseMigrations {
     }
 
     nonisolated func printMigrationComparison(expected expectedList: [String], applied appliedList: [String], logger: Logger) {
-        let maxLength = max((expectedList.max { $0.count > $1.count }?.count ?? 0) + 4, 13)
+        let longestExpected = expectedList.lazy.map(\.count).max() ?? 0
+        let maxLength = max(longestExpected + 4, 13)
         func printLine(expected: String, applied: String) {
             let gap = String(repeating: " ", count: maxLength - expected.count)
             logger.error("\(expected)\(gap)\(applied)")
