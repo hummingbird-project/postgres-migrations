@@ -1,3 +1,4 @@
+#if compiler(>=6.2)
 import Logging
 import Testing
 
@@ -71,3 +72,4 @@ struct PrintMigrationComparisonTests {
         }
     }
 }
+#endif
