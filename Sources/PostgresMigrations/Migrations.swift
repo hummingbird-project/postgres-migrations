@@ -68,16 +68,6 @@ public actor DatabaseMigrations {
         }
     }
 
-    /// Add migrations to list of migrations to be be applied
-    /// - Parameters
-    ///   - migrations: Collection of DatabaseMigrations to be applied
-    ///   - skipDuplicates: Only add migration if it doesn't exist in the list
-    public func add(_ migrations: (any DatabaseMigration)..., skipDuplicates: Bool = false) {
-        for migration in migrations {
-            self.add(migration, skipDuplicates: skipDuplicates)
-        }
-    }
-
     /// Register migration without it being applied
     ///
     /// This is useful for migrations you might have to revert.
