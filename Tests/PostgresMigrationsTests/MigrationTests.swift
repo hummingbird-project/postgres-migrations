@@ -82,6 +82,7 @@ final class MigrationTests {
         let expectedRevert: Int?
     }
 
+    static let testMigrationTableName = "_test_hb_migrations_"
     static let logger = Logger(label: "MigrationTests")
 
     func testMigrations(
@@ -100,7 +101,7 @@ final class MigrationTests {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let migrations = DatabaseMigrations()
+        let migrations = DatabaseMigrations(migrationTableName: Self.testMigrationTableName)
         try await setup(migrations)
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
@@ -126,7 +127,7 @@ final class MigrationTests {
     }
 
     func getAll(client: PostgresClient, groups: [DatabaseMigrationGroup] = [.default]) async throws -> [String] {
-        let repository = PostgresMigrationRepository(client: client)
+        let repository = PostgresMigrationRepository(client: client, migrationTableName: Self.testMigrationTableName)
         return try await repository.getAll(client: client, logger: Self.logger).compactMap { migration in
             if groups.first(where: { group in group == migration.group }) != nil {
                 return migration.name
@@ -604,7 +605,7 @@ final class MigrationTests {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let migrations = DatabaseMigrations()
+        let migrations = DatabaseMigrations(migrationTableName: Self.testMigrationTableName)
         await migrations.add(TestMigration(name: "testMigrationService", group: .test))
         let serviceGroup = ServiceGroup(
             configuration: .init(

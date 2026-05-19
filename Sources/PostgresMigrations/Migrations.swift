@@ -26,12 +26,22 @@ public actor DatabaseMigrations {
     var migrations: [any DatabaseMigration]
     var reverts: [String: any DatabaseMigration]
     var state: State
+    let migrationTableName: String
 
     /// Initialize a DatabaseMigrations object
     public init() {
         self.migrations = []
         self.reverts = [:]
         self.state = .waiting([])
+        self.migrationTableName = "_hb_pg_migrations"
+    }
+
+    /// Initialize a DatabaseMigrations object
+    public init(migrationTableName: String) {
+        self.migrations = []
+        self.reverts = [:]
+        self.state = .waiting([])
+        self.migrationTableName = migrationTableName
     }
 
     /// Add migration to list of migrations to be be applied
@@ -105,7 +115,7 @@ public actor DatabaseMigrations {
             break
         }
         let migrations = self.migrations
-        let repository = PostgresMigrationRepository(client: client)
+        let repository = PostgresMigrationRepository(client: client, migrationTableName: self.migrationTableName)
         do {
             // setup migration repository (create table)
             _ = try await repository.setup(client: client, logger: logger)
@@ -198,7 +208,7 @@ public actor DatabaseMigrations {
         logger: Logger,
         dryRun: Bool
     ) async throws {
-        let repository = PostgresMigrationRepository(client: client)
+        let repository = PostgresMigrationRepository(client: client, migrationTableName: self.migrationTableName)
         do {
             let migrations = self.migrations
             // build map of registered migrations
@@ -317,7 +327,7 @@ public actor DatabaseMigrations {
         logger: Logger,
         dryRun: Bool
     ) async throws {
-        let repository = PostgresMigrationRepository(client: client)
+        let repository = PostgresMigrationRepository(client: client, migrationTableName: self.migrationTableName)
         do {
             let migrations = self.migrations
             // build map of registered migrations
@@ -521,6 +531,8 @@ struct PostgresMigrationRepository: Sendable {
     }
 
     let client: PostgresClient
+    let migrationTableName: String
+
     #if compiler(>=6.0)
     func withTransaction<Value: Sendable>(
         logger: Logger,
@@ -548,21 +560,21 @@ struct PostgresMigrationRepository: Sendable {
 
     func add(_ migration: any DatabaseMigration, context: Context) async throws {
         try await context.connection.query(
-            "INSERT INTO _hb_pg_migrations (\"name\", \"group\") VALUES (\(migration.name), \(migration.group.name))",
+            "INSERT INTO \(unescaped: self.migrationTableName) (\"name\", \"group\") VALUES (\(migration.name), \(migration.group.name))",
             logger: context.logger
         )
     }
 
     func remove(_ migration: any DatabaseMigration, context: Context) async throws {
         try await context.connection.query(
-            "DELETE FROM _hb_pg_migrations WHERE name = \(migration.name)",
+            "DELETE FROM \(unescaped: self.migrationTableName) WHERE name = \(migration.name)",
             logger: context.logger
         )
     }
 
     func getAll(client: PostgresClient, logger: Logger) async throws -> [(name: String, group: DatabaseMigrationGroup)] {
         let stream = try await client.query(
-            "SELECT \"name\", \"group\" FROM _hb_pg_migrations ORDER BY \"order\"",
+            "SELECT \"name\", \"group\" FROM \(unescaped: self.migrationTableName) ORDER BY \"order\"",
             logger: logger
         )
         var result: [(String, DatabaseMigrationGroup)] = []
@@ -575,7 +587,7 @@ struct PostgresMigrationRepository: Sendable {
     private func createMigrationsTable(client: PostgresClient, logger: Logger) async throws {
         try await client.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_pg_migrations (
+            CREATE TABLE IF NOT EXISTS \(unescaped: self.migrationTableName) (
                 "order" SERIAL PRIMARY KEY,
                 "name" text, 
                 "group" text
