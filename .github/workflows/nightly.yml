@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        image: ['nightly-focal', 'nightly-jammy', 'nightly-amazonlinux2']
+        image: ['nightly-jammy', 'nightly-noble', 'nightly-amazonlinux2023']
     
     container:
       image: swiftlang/swift:${{ matrix.image }}
